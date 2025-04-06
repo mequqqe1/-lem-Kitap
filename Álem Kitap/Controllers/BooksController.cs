@@ -17,7 +17,71 @@ namespace BookStore.Controllers
         {
             _context = context;
         }
+        [HttpGet("physical")]
+        public IActionResult GetPhysicalBooks() => Ok(_context.PhysicalBooks);
 
+        [HttpGet("physical/{id}")]
+        public IActionResult GetPhysicalBook(int id)
+        {
+            var book = _context.PhysicalBooks.Find(id);
+            return book == null ? NotFound() : Ok(book);
+        }
+
+        public class PhysicalBookPurchaseRequest
+        {
+            public int Quantity { get; set; }
+            public string CustomerName { get; set; }
+            public string PhoneNumber { get; set; }
+            public string Email { get; set; }
+            public string City { get; set; }
+            public string Address { get; set; }
+            public string PostalCode { get; set; }
+        }
+        [Authorize]
+        [HttpPost("buy-physical/{bookId}")]
+        public async Task<IActionResult> BuyPhysicalBook(int bookId, [FromBody] PhysicalBookPurchaseRequest req)
+        {
+            var book = await _context.PhysicalBooks.FindAsync(bookId);
+            if (book == null) return NotFound("Книга не найдена.");
+            if (book.Stock < req.Quantity) return BadRequest("Недостаточно книг.");
+
+            book.Stock -= req.Quantity;
+
+            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier).Value);
+
+            var purchase = new PhysicalPurchase
+            {
+                UserId = userId,
+                PhysicalBookId = book.Id,
+                Quantity = req.Quantity,
+                AmountPaid = book.Price * req.Quantity,
+                PurchaseDate = DateTime.UtcNow,
+                Status = OrderStatus.Created,
+                CustomerName = req.CustomerName,
+                PhoneNumber = req.PhoneNumber,
+                Email = req.Email,
+                City = req.City,
+                Address = req.Address,
+                PostalCode = req.PostalCode
+            };
+
+            _context.PhysicalPurchases.Add(purchase);
+            await _context.SaveChangesAsync();
+
+            return Ok(purchase);
+        }
+        [Authorize]
+        [HttpGet("my-physical-purchases")]
+        public IActionResult GetMyPhysicalPurchases()
+        {
+            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier).Value);
+            var purchases = _context.PhysicalPurchases
+                .Include(p => p.PhysicalBook)
+                .Where(p => p.UserId == userId)
+                .ToList();
+
+            return Ok(purchases);
+        }
         [HttpGet]
         public async Task<IActionResult> GetBooks()
         {
@@ -136,6 +200,36 @@ namespace BookStore.Controllers
             return Ok(new { token, expiresAt });
         }
 
+        [Authorize]
+        [HttpGet("my-physical-orders")]
+        public async Task<IActionResult> GetMyPhysicalOrders()
+        {
+            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+
+            var orders = await _context.PhysicalPurchases
+                .Include(p => p.PhysicalBook)
+                .Where(p => p.UserId == userId)
+                .OrderByDescending(p => p.PurchaseDate)
+                .Select(p => new PhysicalOrderResponse
+                {
+                    OrderId = p.Id,
+                    BookTitle = p.PhysicalBook.Title,
+                    CoverPath = p.PhysicalBook.CoverPath,
+                    Quantity = p.Quantity,
+                    TotalPrice = p.AmountPaid,
+                    PurchaseDate = p.PurchaseDate,
+                    Status = p.Status.ToString(),
+
+                    CustomerName = p.CustomerName,
+                    PhoneNumber = p.PhoneNumber,
+                    City = p.City,
+                    Address = p.Address,
+                    PostalCode = p.PostalCode
+                })
+                .ToListAsync();
+
+            return Ok(orders);
+        }
 
         [HttpGet("read-token/{token}")]
         public async Task<IActionResult> ReadBookWithToken(string token)
@@ -172,4 +266,22 @@ namespace BookStore.Controllers
     {
         public decimal Amount { get; set; }
     }
+    public class PhysicalOrderResponse
+    {
+        public int OrderId { get; set; }
+        public string BookTitle { get; set; }
+        public string CoverPath { get; set; }
+        public int Quantity { get; set; }
+        public decimal TotalPrice { get; set; }
+        public DateTime PurchaseDate { get; set; }
+        public string Status { get; set; }
+
+        // Контактные данные
+        public string CustomerName { get; set; }
+        public string PhoneNumber { get; set; }
+        public string City { get; set; }
+        public string Address { get; set; }
+        public string PostalCode { get; set; }
+    }
+
 }

@@ -12,6 +12,9 @@ namespace BookStore.Data
         public DbSet<Purchase> Purchases { get; set; }
         public DbSet<AccessToken> AccessTokens { get; set; }
 
+        public DbSet<PhysicalBook> PhysicalBooks { get; set; }
+        public DbSet<PhysicalPurchase> PhysicalPurchases { get; set; }
+
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

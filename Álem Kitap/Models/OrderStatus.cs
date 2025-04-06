@@ -1,6 +1,11 @@
-namespace Álem_Kitap.Models;
-
-public class OrderStatus
+namespace BookStore.Data
 {
-    
+    public enum OrderStatus
+    {
+        Created,    // Создан
+        Paid,       // Оплачен
+        Shipped,    // Отправлен
+        Delivered,  // Доставлен
+        Cancelled   // Отменён
+    }
 }
