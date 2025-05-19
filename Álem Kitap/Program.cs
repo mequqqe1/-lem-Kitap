@@ -50,6 +50,12 @@ builder.WebHost.ConfigureKestrel(options =>
 });
 
 builder.Services.AddControllers();
+builder.Services.AddControllers().AddJsonOptions(x =>
+{
+    x.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+    x.JsonSerializerOptions.WriteIndented = true;
+});
+
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();

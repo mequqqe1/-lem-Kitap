@@ -23,6 +23,97 @@ namespace BookStore.Controllers
             var isAdmin = User.FindFirst("IsAdmin")?.Value;
             return isAdmin == "True";
         }
+        public class UpdateOrderStatusRequest
+        {
+            public int PurchaseId { get; set; }
+            public OrderStatus NewStatus { get; set; }
+        }
+
+        public class PhysicalBookRequest
+        {
+            public string Title { get; set; }
+            public string Author { get; set; }
+            public string Description { get; set; }
+            public decimal Price { get; set; }
+            public int Stock { get; set; }
+            public IFormFile Cover { get; set; }
+        }
+
+        [HttpGet("all-physical-orders")]
+        public async Task<IActionResult> GetAllPhysicalOrders()
+        {
+            if (!IsAdmin())
+                return Forbid();
+
+            var orders = await _context.PhysicalPurchases
+                .Include(p => p.PhysicalBook)
+                .Include(p => p.User)
+                .OrderByDescending(p => p.PurchaseDate)
+                .ToListAsync();
+
+            return Ok(orders);
+        }
+        [HttpPut("update-physical-order-status")]
+        public async Task<IActionResult> UpdatePhysicalOrderStatus([FromBody] UpdateOrderStatusRequest request)
+        {
+            if (!IsAdmin())
+                return Forbid("У вас нет доступа.");
+
+            var purchase = await _context.PhysicalPurchases
+                .Include(p => p.PhysicalBook)
+                .FirstOrDefaultAsync(p => p.Id == request.PurchaseId);
+
+            if (purchase == null)
+                return NotFound("Заказ не найден.");
+
+            purchase.Status = request.NewStatus;
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                Message = "Статус обновлён",
+                OrderId = purchase.Id,
+                NewStatus = purchase.Status.ToString()
+            });
+        }
+
+        [HttpPost("add-physical-book")]
+        public async Task<IActionResult> AddPhysicalBook([FromForm] PhysicalBookRequest request)
+        {
+            if (!IsAdmin()) return Forbid();
+
+            if (request.Cover == null) 
+                return BadRequest("Нужна обложка.");
+
+            var coverName = $"{Guid.NewGuid()}_{request.Cover.FileName}";
+            var coverPath = Path.Combine("wwwroot/covers", coverName);
+
+            using var stream = new FileStream(coverPath, FileMode.Create);
+            await request.Cover.CopyToAsync(stream);
+
+            var book = new PhysicalBook
+            {
+                Title = request.Title,
+                Author = request.Author,
+                Description = request.Description,
+                Price = request.Price,
+                Stock = request.Stock,
+                CoverPath = $"covers/{coverName}"
+            };
+
+            _context.PhysicalBooks.Add(book);
+            await _context.SaveChangesAsync();
+
+            return Ok(book);
+        }
+        [HttpGet("physical-books")]
+        public IActionResult GetAllPhysicalBooks()
+        {
+            if (!IsAdmin()) return Forbid();
+
+            return Ok(_context.PhysicalBooks);
+        }
+
         [HttpPost("add-book")]
         public async Task<IActionResult> AddBook([FromForm] BookUploadRequest request)
         {
