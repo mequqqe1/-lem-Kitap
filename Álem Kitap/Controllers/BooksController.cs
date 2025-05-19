@@ -33,6 +33,56 @@ namespace BookStore.Controllers
             return Ok(book);
         }
 
+        [HttpGet("books/{*fileName}")]
+        public IActionResult DownloadEpub(string fileName)
+        {
+            // Декодируем URL-закодированные символы
+            fileName = Uri.UnescapeDataString(fileName ?? string.Empty);
+
+            // Проверка на пустое имя
+            if (string.IsNullOrEmpty(fileName))
+            {
+                return BadRequest("Имя файла не указано.");
+            }
+
+            // Проверка на Path Traversal
+            if (fileName.Contains("..") || fileName.Contains("/") || fileName.Contains("\\"))
+            {
+                return BadRequest("Недопустимое имя файла.");
+            }
+
+            var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "books", fileName);
+            if (!System.IO.File.Exists(filePath))
+            {
+                return NotFound("Файл не найден.");
+            }
+
+            var fileStream = System.IO.File.OpenRead(filePath);
+            return File(fileStream, "application/epub+zip", fileName);
+        }
+
+        [HttpGet("download/{id:int}")]
+        public async Task<IActionResult> DownloadEpub(int id)
+        {
+            var book = await _context.Books.FindAsync(id);
+            if (book == null || string.IsNullOrEmpty(book.FilePath))
+            {
+                return NotFound("Книга не найдена.");
+            }
+
+            // Извлекаем имя файла из FilePath (удаляем "books/")
+            var fileName = Path.GetFileName(book.FilePath);
+            var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "books", fileName);
+
+            if (!System.IO.File.Exists(filePath))
+            {
+                return NotFound("Файл не найден.");
+            }
+
+            var fileStream = System.IO.File.OpenRead(filePath);
+            return File(fileStream, "application/epub+zip", fileName);
+        }
+
         [Authorize]
         [HttpPost("buy/{bookId}")]
         public async Task<IActionResult> BuyBook(int bookId, [FromBody] PaymentRequest request)
